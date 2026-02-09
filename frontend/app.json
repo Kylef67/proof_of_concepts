@@ -25,7 +25,7 @@
       "favicon": "./assets/favicon.png"
     },
     "extra": {
-      "apiUrl": "https://yezfovq877.execute-api.ap-southeast-1.amazonaws.com/test/api"
+      "apiUrl": "http://localhost:3000/dev/api"
     }
   }
 }

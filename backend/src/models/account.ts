@@ -14,6 +14,7 @@ interface IAccount extends Document {
     isDeleted?: boolean;
     syncVersion?: number;
     lastModifiedBy?: string;
+    createdAt: Date;
 }
 
 const accountSchema: Schema = new mongoose.Schema({
