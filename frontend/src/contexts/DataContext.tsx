@@ -235,7 +235,8 @@ export function DataProvider({ children }: DataProviderProps) {
   const queueOperation = async (
     type: OperationType,
     resource: ResourceType,
-    data: any
+    data: any,
+    expectedSyncVersion?: number
   ): Promise<void> => {
     const operation: OfflineOperation = {
       id: `op-${Date.now()}-${Math.random().toString(36).substring(2, 15)}`,
@@ -244,6 +245,7 @@ export function DataProvider({ children }: DataProviderProps) {
       resource,
       data,
       localTimestamp: Date.now(),
+      expectedSyncVersion,
       retryCount: 0,
       deviceId
     };
@@ -251,8 +253,8 @@ export function DataProvider({ children }: DataProviderProps) {
     const newQueue = [...offlineQueue, operation];
     setOfflineQueue(newQueue);
     await storageService.saveOfflineQueue(newQueue);
-    
-    console.log(`📝 Queued ${type} operation for ${resource}:`, data.id || data.name);
+
+    console.log(`📝 Queued ${type} operation for ${resource}:`, data.id || data.name, `(expected v${expectedSyncVersion})`);
   };
 
   // Trigger manual or automatic sync
@@ -388,23 +390,27 @@ export function DataProvider({ children }: DataProviderProps) {
 
   const updateAccount = async (account: Account) => {
     try {
+      // Find current account for syncVersion
+      const currentAccount = accounts.find(a => a.id === account.id);
+      const expectedSyncVersion = currentAccount?.syncVersion || 1;
+
       // Optimistic update
       const originalAccounts = [...accounts];
-      const updatedAccounts = accounts.map(acc => 
+      const updatedAccounts = accounts.map(acc =>
         acc.id === account.id ? account : acc
       );
       setAccounts(updatedAccounts);
       await storageService.saveAccounts(updatedAccounts);
 
       if (!isOnline) {
-        await queueOperation('UPDATE', 'account', account);
+        await queueOperation('UPDATE', 'account', account, expectedSyncVersion);
         console.log('📴 Offline: Account update queued');
         return;
       }
 
       // API call
       const response = await apiService.updateAccount(account.id, account);
-      
+
       if (!response.success) {
         // Revert optimistic update
         setAccounts(originalAccounts);
@@ -415,7 +421,8 @@ export function DataProvider({ children }: DataProviderProps) {
       if (isOnline) {
         await loadAllData();
       } else {
-        await queueOperation('UPDATE', 'account', account);
+        const currentAccount = accounts.find(a => a.id === account.id);
+        await queueOperation('UPDATE', 'account', account, currentAccount?.syncVersion || 1);
       }
       setError(err instanceof Error ? err.message : 'Failed to update account');
       throw err;
@@ -424,23 +431,27 @@ export function DataProvider({ children }: DataProviderProps) {
 
   const deleteAccount = async (id: string) => {
     try {
+      // Find current account for syncVersion
+      const currentAccount = accounts.find(a => a.id === id);
+      const expectedSyncVersion = currentAccount?.syncVersion || 1;
+
       // Optimistic update - mark as deleted instead of removing
       const originalAccounts = [...accounts];
-      const updatedAccounts = accounts.map(acc => 
+      const updatedAccounts = accounts.map(acc =>
         acc.id === id ? { ...acc, isDeleted: true } : acc
       );
       setAccounts(updatedAccounts);
       await storageService.saveAccounts(updatedAccounts);
 
       if (!isOnline) {
-        await queueOperation('DELETE', 'account', { id });
+        await queueOperation('DELETE', 'account', { id, syncVersion: expectedSyncVersion }, expectedSyncVersion);
         console.log('📴 Offline: Account deletion queued');
         return;
       }
 
       // API call
       const response = await apiService.deleteAccount(id);
-      
+
       if (!response.success) {
         // Revert optimistic update
         setAccounts(originalAccounts);
@@ -467,7 +478,8 @@ export function DataProvider({ children }: DataProviderProps) {
       if (!isOnline) {
         // Queue multiple updates
         for (const account of reorderedAccounts) {
-          await queueOperation('UPDATE', 'account', account);
+          const currentAccount = originalAccounts.find(a => a.id === account.id);
+          await queueOperation('UPDATE', 'account', account, currentAccount?.syncVersion || 1);
         }
         console.log('📴 Offline: Account reordering queued');
         return;
@@ -531,13 +543,16 @@ export function DataProvider({ children }: DataProviderProps) {
 
   const updateCategory = async (category: Category) => {
     try {
+      const currentCategory = categories.find(c => c.id === category.id);
+      const expectedSyncVersion = currentCategory?.syncVersion || 1;
+
       const originalCategories = [...categories];
       const updated = categories.map(cat => cat.id === category.id ? category : cat);
       setCategories(updated);
       await storageService.saveCategories(updated);
 
       if (!isOnline) {
-        await queueOperation('UPDATE', 'category', category);
+        await queueOperation('UPDATE', 'category', category, expectedSyncVersion);
         return;
       }
 
@@ -549,7 +564,10 @@ export function DataProvider({ children }: DataProviderProps) {
       }
     } catch (err) {
       if (isOnline) await loadAllData();
-      else await queueOperation('UPDATE', 'category', category);
+      else {
+        const currentCategory = categories.find(c => c.id === category.id);
+        await queueOperation('UPDATE', 'category', category, currentCategory?.syncVersion || 1);
+      }
       setError(err instanceof Error ? err.message : 'Failed to update category');
       throw err;
     }
@@ -557,13 +575,16 @@ export function DataProvider({ children }: DataProviderProps) {
 
   const deleteCategory = async (id: string) => {
     try {
+      const currentCategory = categories.find(c => c.id === id);
+      const expectedSyncVersion = currentCategory?.syncVersion || 1;
+
       const originalCategories = [...categories];
       const updated = categories.filter(cat => cat.id !== id);
       setCategories(updated);
       await storageService.saveCategories(updated);
 
       if (!isOnline) {
-        await queueOperation('DELETE', 'category', { id });
+        await queueOperation('DELETE', 'category', { id, syncVersion: expectedSyncVersion }, expectedSyncVersion);
         return;
       }
 
@@ -578,7 +599,8 @@ export function DataProvider({ children }: DataProviderProps) {
         setCategories(categories);
         await storageService.saveCategories(categories);
       } else {
-        await queueOperation('DELETE', 'category', { id });
+        const currentCategory = categories.find(c => c.id === id);
+        await queueOperation('DELETE', 'category', { id, syncVersion: expectedSyncVersion }, currentCategory?.syncVersion || 1);
       }
       setError(err instanceof Error ? err.message : 'Failed to delete category');
       throw err;
@@ -593,7 +615,8 @@ export function DataProvider({ children }: DataProviderProps) {
 
       if (!isOnline) {
         for (const category of reorderedCategories) {
-          await queueOperation('UPDATE', 'category', category);
+          const currentCategory = originalCategories.find(c => c.id === category.id);
+          await queueOperation('UPDATE', 'category', category, currentCategory?.syncVersion || 1);
         }
         return;
       }
@@ -650,13 +673,16 @@ export function DataProvider({ children }: DataProviderProps) {
 
   const updateTransaction = async (transaction: Transaction) => {
     try {
+      const currentTransaction = transactions.find(t => t.id === transaction.id);
+      const expectedSyncVersion = currentTransaction?.syncVersion || 1;
+
       const originalTransactions = [...transactions];
       const updated = transactions.map(trans => trans.id === transaction.id ? transaction : trans);
       setTransactions(updated);
       await storageService.saveTransactions(updated);
 
       if (!isOnline) {
-        await queueOperation('UPDATE', 'transaction', transaction);
+        await queueOperation('UPDATE', 'transaction', transaction, expectedSyncVersion);
         return;
       }
 
@@ -668,7 +694,10 @@ export function DataProvider({ children }: DataProviderProps) {
       }
     } catch (err) {
       if (isOnline) await loadAllData();
-      else await queueOperation('UPDATE', 'transaction', transaction);
+      else {
+        const currentTransaction = transactions.find(t => t.id === transaction.id);
+        await queueOperation('UPDATE', 'transaction', transaction, currentTransaction?.syncVersion || 1);
+      }
       setError(err instanceof Error ? err.message : 'Failed to update transaction');
       throw err;
     }
@@ -676,13 +705,16 @@ export function DataProvider({ children }: DataProviderProps) {
 
   const deleteTransaction = async (id: string) => {
     try {
+      const currentTransaction = transactions.find(t => t.id === id);
+      const expectedSyncVersion = currentTransaction?.syncVersion || 1;
+
       const originalTransactions = [...transactions];
       const updated = transactions.filter(trans => trans.id !== id);
       setTransactions(updated);
       await storageService.saveTransactions(updated);
 
       if (!isOnline) {
-        await queueOperation('DELETE', 'transaction', { id });
+        await queueOperation('DELETE', 'transaction', { id, syncVersion: expectedSyncVersion }, expectedSyncVersion);
         return;
       }
 
@@ -697,7 +729,8 @@ export function DataProvider({ children }: DataProviderProps) {
         setTransactions(transactions);
         await storageService.saveTransactions(transactions);
       } else {
-        await queueOperation('DELETE', 'transaction', { id });
+        const currentTransaction = transactions.find(t => t.id === id);
+        await queueOperation('DELETE', 'transaction', { id, syncVersion: expectedSyncVersion }, currentTransaction?.syncVersion || 1);
       }
       setError(err instanceof Error ? err.message : 'Failed to delete transaction');
       throw err;
@@ -758,7 +791,7 @@ export function DataProvider({ children }: DataProviderProps) {
     error,
     isInitialized,
     isLoadingData,
-    
+
     // Offline/Sync state
     isOnline,
     isSyncing,
@@ -789,6 +822,24 @@ export function DataProvider({ children }: DataProviderProps) {
     refreshData,
     triggerSync,
   };
+
+  // Expose sync state for testing (development/test only)
+  React.useEffect(() => {
+    if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
+      (window as any).__DATA_CONTEXT__ = {
+        isSyncing,
+        offlineQueueCount,
+        lastSyncTime: lastSyncTimestamp,
+        isOnline,
+        triggerSync,
+        // Test-only method to manually set online/offline state
+        setOfflineForTesting: (online: boolean) => {
+          console.log(`🧪 Test: Setting isOnline to ${online}`);
+          setIsOnline(online);
+        }
+      };
+    }
+  }, [isSyncing, offlineQueueCount, lastSyncTimestamp, isOnline, triggerSync]);
 
   return (
     <DataContext.Provider value={value}>

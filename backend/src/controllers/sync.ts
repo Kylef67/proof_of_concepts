@@ -91,7 +91,7 @@ export default {
       // Process each operation
       for (const operation of operations) {
         try {
-          const { type, resource, data, localTimestamp, operationId } = operation;
+          const { type, resource, data, localTimestamp, operationId, expectedSyncVersion } = operation;
           
           console.log(`  Processing ${type} ${resource}: ${data.id || data.name}`);
 
@@ -138,6 +138,7 @@ export default {
               }
               delete createData.id;
               createData.updatedAt = Date.now();
+              createData.lastSyncTimestamp = Date.now();
               createData.syncVersion = 1;
               createData.lastModifiedBy = deviceId || 'unknown';
 
@@ -160,35 +161,44 @@ export default {
                 reason: 'Record not found on server',
                 serverRecord: null
               });
-            } else if (existing.updatedAt > localTimestamp) {
-              // Server has newer version - conflict (server wins)
-              console.log(`  ⚠️  Conflict: ${resource} ${recordId} has newer version on server`);
-              results.conflicts.push({
-                operationId,
-                reason: 'Server has newer version',
-                serverRecord: transformForFrontend(existing),
-                serverUpdatedAt: existing.updatedAt,
-                localTimestamp
-              });
-              results.serverData[resourceType].push(transformForFrontend(existing));
             } else {
-              // Apply update
-              const updateData = { ...data };
-              delete updateData.id;
-              delete updateData._id;
-              updateData.updatedAt = Date.now();
-              updateData.syncVersion = (existing.syncVersion || 1) + 1;
-              updateData.lastModifiedBy = deviceId || 'unknown';
+              // First-to-sync-wins conflict detection
+              const expectedVersion = expectedSyncVersion || data.syncVersion || existing.syncVersion;
 
-              const updated = await Model.findByIdAndUpdate(
-                recordId,
-                updateData,
-                { new: true, runValidators: true }
-              );
+              if (existing.syncVersion !== expectedVersion) {
+                // Another device modified this record since client's last sync
+                console.log(`  ⚠️  First-to-sync conflict: ${resource} ${recordId} - expected v${expectedVersion}, but server has v${existing.syncVersion} by ${existing.lastModifiedBy}`);
 
-              console.log(`  ✅ Updated ${resource}: ${recordId}`);
-              results.accepted.push({ operationId, id: recordId });
-              results.serverData[resourceType].push(transformForFrontend(updated));
+                results.conflicts.push({
+                  operationId,
+                  reason: `Another device (${existing.lastModifiedBy}) modified this record first`,
+                  serverRecord: transformForFrontend(existing),
+                  serverSyncVersion: existing.syncVersion,
+                  expectedSyncVersion: expectedVersion,
+                  conflictType: 'first-to-sync-wins',
+                  lastModifiedBy: existing.lastModifiedBy
+                });
+                results.serverData[resourceType].push(transformForFrontend(existing));
+              } else {
+                // Apply update
+                const updateData = { ...data };
+                delete updateData.id;
+                delete updateData._id;
+                updateData.updatedAt = Date.now();
+                updateData.lastSyncTimestamp = Date.now();
+                updateData.syncVersion = (existing.syncVersion || 1) + 1;
+                updateData.lastModifiedBy = deviceId || 'unknown';
+
+                const updated = await Model.findByIdAndUpdate(
+                  recordId,
+                  updateData,
+                  { new: true, runValidators: true }
+                );
+
+                console.log(`  ✅ Updated ${resource}: ${recordId}`);
+                results.accepted.push({ operationId, id: recordId });
+                results.serverData[resourceType].push(transformForFrontend(updated));
+              }
             }
           } else if (type === 'DELETE') {
             // For deletes, check for conflicts
@@ -198,34 +208,43 @@ export default {
             if (!existing) {
               console.log(`  ℹ️  ${resource} ${recordId} already deleted or not found`);
               results.accepted.push({ operationId, id: recordId });
-            } else if (existing.updatedAt > localTimestamp) {
-              // Server has newer version - conflict (server wins, keep the record)
-              console.log(`  ⚠️  Conflict: ${resource} ${recordId} has newer version, delete rejected`);
-              results.conflicts.push({
-                operationId,
-                reason: 'Server has newer version, delete rejected',
-                serverRecord: transformForFrontend(existing),
-                serverUpdatedAt: existing.updatedAt,
-                localTimestamp
-              });
-              results.serverData[resourceType].push(transformForFrontend(existing));
             } else {
-              // Perform soft delete
-              const updated = await Model.findByIdAndUpdate(
-                recordId,
-                { 
-                  isDeleted: true, 
-                  deletedAt: new Date(),
-                  updatedAt: Date.now(),
-                  syncVersion: (existing.syncVersion || 1) + 1,
-                  lastModifiedBy: deviceId || 'unknown'
-                },
-                { new: true }
-              );
+              // First-to-sync-wins conflict detection
+              const expectedVersion = expectedSyncVersion || data.syncVersion || existing.syncVersion;
 
-              console.log(`  ✅ Deleted ${resource}: ${recordId}`);
-              results.accepted.push({ operationId, id: recordId });
-              results.serverData[resourceType].push(transformForFrontend(updated));
+              if (existing.syncVersion !== expectedVersion) {
+                // Another device modified this record since client's last sync
+                console.log(`  ⚠️  First-to-sync conflict: ${resource} ${recordId} - delete rejected, expected v${expectedVersion}, but server has v${existing.syncVersion} by ${existing.lastModifiedBy}`);
+
+                results.conflicts.push({
+                  operationId,
+                  reason: `Another device (${existing.lastModifiedBy}) modified this record first, delete rejected`,
+                  serverRecord: transformForFrontend(existing),
+                  serverSyncVersion: existing.syncVersion,
+                  expectedSyncVersion: expectedVersion,
+                  conflictType: 'first-to-sync-wins',
+                  lastModifiedBy: existing.lastModifiedBy
+                });
+                results.serverData[resourceType].push(transformForFrontend(existing));
+              } else {
+                // Perform soft delete
+                const updated = await Model.findByIdAndUpdate(
+                  recordId,
+                  {
+                    isDeleted: true,
+                    deletedAt: new Date(),
+                    updatedAt: Date.now(),
+                    lastSyncTimestamp: Date.now(),
+                    syncVersion: (existing.syncVersion || 1) + 1,
+                    lastModifiedBy: deviceId || 'unknown'
+                  },
+                  { new: true }
+                );
+
+                console.log(`  ✅ Deleted ${resource}: ${recordId}`);
+                results.accepted.push({ operationId, id: recordId });
+                results.serverData[resourceType].push(transformForFrontend(updated));
+              }
             }
           }
         } catch (operationError) {

@@ -11,6 +11,7 @@ interface IAccount extends Document {
     creditLimit?: number;
     order?: number;
     updatedAt: number;
+    lastSyncTimestamp?: number;
     isDeleted?: boolean;
     syncVersion?: number;
     lastModifiedBy?: string;
@@ -28,6 +29,7 @@ const accountSchema: Schema = new mongoose.Schema({
     creditLimit: { type: Number },
     order: { type: Number, default: 0 },
     updatedAt: { type: Number, default: Date.now },
+    lastSyncTimestamp: { type: Number, default: Date.now },
     isDeleted: { type: Boolean, default: false },
     syncVersion: { type: Number, default: 1 },
     lastModifiedBy: { type: String, default: 'system' }
