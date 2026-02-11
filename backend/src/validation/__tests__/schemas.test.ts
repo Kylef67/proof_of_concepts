@@ -57,9 +57,10 @@ describe('Validation Schemas', () => {
       const validData = {
         transactionDate: '2023-05-15',
         fromAccount: '507f1f77bcf86cd799439011',
-        toAccount: '507f1f77bcf86cd799439012'
+        toAccount: '507f1f77bcf86cd799439012',
+        amount: 100.50
       };
-      
+
       const result = transactionSchema.create.safeParse(validData);
       expect(result.success).toBe(true);
     });
