@@ -23,11 +23,8 @@ export default function Categories() {
   
   const totalExpenses = categories
     .filter(cat => cat.type === 'Expense')
-    .reduce((sum, category) => sum + (category.amount || 0), 0);
-  
-  // Get categories with transactions this month
-  const activeCategories = categories.filter(cat => (cat.amount || 0) > 0 || (cat.transactionCount || 0) > 0);
-  
+    .reduce((sum, category) => sum + (category.transactions?.all.total || category.balance || 0), 0);
+ 
   // Format currency to ₱ X,XXX
   const formatCurrency = (amount: number) => {
     if (amount === 0) return '₱ 0';
@@ -49,7 +46,7 @@ export default function Categories() {
         const newCategory: Category = {
           ...categoryData,
           id: Date.now().toString(), // Temporary ID, backend will assign real one
-          amount: 0,
+          balance: 0,
           transactionCount: 0,
         };
         await addCategory(newCategory);
@@ -150,143 +147,48 @@ export default function Categories() {
           </View>
         ) : (
           <View style={styles.dashboardContainer}>
-            {/* First row of categories */}
-            <View style={styles.categoryRow}>
-              {categories.slice(0, 4).map((category) => {
-                
-                return (
-                  <TouchableOpacity 
-                    key={category.id} 
-                    style={styles.categoryItem}
-                    onPress={() => handleCategoryPress(category)}
-                  >
-                    <Text style={styles.categoryName}>{category.name}</Text>
-                    <Text style={styles.categoryAmount}>{formatCurrency(category.amount || 0)}</Text>
-                    
-                    <View style={[styles.iconContainer, { backgroundColor: category.color }]}>
-                      <MaterialCommunityIcons 
-                        name={category.icon as any} 
-                        size={32} 
-                        color="#FFF" 
-                      />
-                    </View>
-                    
-                    <Text style={styles.categoryAmountLarge}>{formatCurrency(category.amount || 0)}</Text>
-                    
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
+            {/* Dynamically render category rows */}
+            {(() => {
+              const activeCategories = categories.filter(category => !category.isDeleted);
+              const rows = [];
+              const itemsPerRow = 4;
 
-            {/* Second row of categories */}
-            <View style={styles.categoryRow}>
-              {categories.slice(4, 8).map((category) => {
-                const hasActivity = (category.transactions?.all.count || 0) > 0 || 
-                                  (category.subcategories?.length || 0) > 0;
-                
-                return (
-                  <TouchableOpacity 
-                    key={category.id} 
-                    style={styles.categoryItem}
-                    onPress={() => handleCategoryPress(category)}
-                  >
-                    <Text style={styles.categoryName}>{category.name}</Text>
-                    <Text style={styles.categoryAmount}>{formatCurrency(category.amount || 0)}</Text>
-                    
-                    <View style={[styles.iconContainer, { backgroundColor: category.color }]}>
-                      <MaterialCommunityIcons 
-                        name={category.icon as any} 
-                        size={32} 
-                        color="#FFF" 
-                      />
-                    </View>
-                    
-                    <Text style={styles.categoryAmountLarge}>{formatCurrency(category.amount || 0)}</Text>
-                    
-                    {/* Activity indicator */}
-                    {hasActivity && (
-                      <View style={styles.activityIndicator}>
-                        <View style={styles.activityDot} />
-                      </View>
-                    )}
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
+              for (let i = 0; i < activeCategories.length; i += itemsPerRow) {
+                const rowCategories = activeCategories.slice(i, i + itemsPerRow);
 
-            {/* Third row of categories */}
-            <View style={styles.categoryRow}>
-              {categories.slice(8, 12).map((category) => {
-                const hasActivity = (category.transactions?.all.count || 0) > 0 || 
-                                  (category.subcategories?.length || 0) > 0;
-                
-                return (
-                  <TouchableOpacity 
-                    key={category.id} 
-                    style={styles.categoryItem}
-                    onPress={() => handleCategoryPress(category)}
-                  >
-                    <Text style={styles.categoryName}>{category.name}</Text>
-                    <Text style={styles.categoryAmount}>{formatCurrency(category.amount || 0)}</Text>
-                    
-                    <View style={[styles.iconContainer, { backgroundColor: category.color }]}>
-                      <MaterialCommunityIcons 
-                        name={category.icon as any} 
-                        size={32} 
-                        color="#FFF" 
-                      />
-                    </View>
-                    
-                    <Text style={styles.categoryAmountLarge}>{formatCurrency(category.amount || 0)}</Text>
-                    
-                    {/* Activity indicator */}
-                    {hasActivity && (
-                      <View style={styles.activityIndicator}>
-                        <View style={styles.activityDot} />
-                      </View>
-                    )}
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
+                rows.push(
+                  <View key={`row-${i}`} style={styles.categoryRow}>
+                    {rowCategories.map((category) => {
+                      const amount = category.transactions?.all.total || category.balance || 0;
+                     
+                      return (
+                        <TouchableOpacity
+                          key={category.id}
+                          style={styles.categoryItem}
+                          onPress={() => handleCategoryPress(category)}
+                        >
+                          <Text style={styles.categoryName}>{category.name}</Text>
+                          <Text style={styles.categoryAmount}>{formatCurrency(amount)}</Text>
 
-            {/* Remaining categories if any */}
-            {categories.length > 12 && (
-              <View style={styles.remainingCategories}>
-                {categories.slice(12).map((category) => {
-                  const hasActivity = (category.transactions?.all.count || 0) > 0 || 
-                                    (category.subcategories?.length || 0) > 0;
-                  
-                  return (
-                    <TouchableOpacity 
-                      key={category.id} 
-                      style={styles.categoryItem}
-                      onPress={() => handleCategoryPress(category)}
-                    >
-                      <Text style={styles.categoryName}>{category.name}</Text>
-                      <Text style={styles.categoryAmount}>{formatCurrency(category.amount || 0)}</Text>
-                      
-                      <View style={[styles.iconContainer, { backgroundColor: category.color }]}>
-                        <MaterialCommunityIcons 
-                          name={category.icon as any} 
-                          size={32} 
-                          color="#FFF" 
-                        />
-                      </View>
-                      
-                      <Text style={styles.categoryAmountLarge}>{formatCurrency(category.amount || 0)}</Text>
-                      
-                      {/* Activity indicator */}
-                      {hasActivity && (
-                        <View style={styles.activityIndicator}>
-                          <View style={styles.activityDot} />
-                        </View>
-                      )}
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            )}
+                          <View style={[styles.iconContainer, { backgroundColor: category.color }]}>
+                            <MaterialCommunityIcons
+                              name={category.icon as any}
+                              size={32}
+                              color="#FFF"
+                            />
+                          </View>
+
+                          <Text style={styles.categoryAmountLarge}>{formatCurrency(amount)}</Text>
+
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                );
+              }
+
+              return rows;
+            })()}
           </View>
         )}
       </ScrollView>

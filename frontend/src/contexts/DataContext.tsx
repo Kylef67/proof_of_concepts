@@ -35,6 +35,13 @@ export interface Category {
   transactionCount?: number;
   directTransactionCount?: number;
   subcategories?: Category[];
+  isDeleted?: boolean;
+  // Enhanced data from backend /all endpoint
+  transactions?: {
+    direct: { total: number; count: number };
+    subcategories: { total: number; count: number };
+    all: { total: number; count: number };
+  };
 }
 
 export interface Transaction {

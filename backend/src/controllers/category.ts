@@ -221,7 +221,7 @@ export default {
       category.updatedAt = Date.now();
       category.syncVersion = (category.syncVersion || 1) + 1;
       category.lastModifiedBy = req.body?.deviceId || req.headers['x-device-id'] as string || 'system';
-      // Note: Category model doesn't have isDeleted field yet, but Transaction does
+      category.isDeleted = true;
       await category.save();
 
       res.json({ message: translate('categories.deleted_success', req.lang) });

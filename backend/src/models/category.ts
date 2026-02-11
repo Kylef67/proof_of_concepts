@@ -18,6 +18,7 @@ interface ICategory extends Document {
     updatedAt?: number;
     syncVersion?: number;
     lastModifiedBy?: string;
+    isDeleted?: boolean;
 }
 
 const categorySchema: Schema = new mongoose.Schema({
@@ -34,7 +35,8 @@ const categorySchema: Schema = new mongoose.Schema({
     directTransactionCount: { type: Number, default: 0 }, // Direct transaction count only
     updatedAt: { type: Number, default: Date.now },
     syncVersion: { type: Number, default: 1 },
-    lastModifiedBy: { type: String, default: 'system' }
+    lastModifiedBy: { type: String, default: 'system' },
+    isDeleted: { type: Boolean, default: false },
 }, { timestamps: true });
 
 // Virtual for getting subcategories
