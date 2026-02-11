@@ -16,11 +16,7 @@ export default function Categories() {
     error, 
     isInitialized 
   } = useData();
-  const [dateSelection, setDateSelection] = useState<DateRangeSelection>({
-    mode: 'month',
-    displayText: 'OCTOBER 2024',
-    displayNumber: '31',
-  });
+
   const [showCategoryForm, setShowCategoryForm] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
   const [showCategoryDetails, setShowCategoryDetails] = useState(false);
@@ -68,19 +64,8 @@ export default function Categories() {
 
   // Smart category click behavior
   const handleCategoryPress = (category: Category) => {
-    const hasTransactions = (category.transactions?.all.count || 0) > 0;
-    const hasSubcategories = (category.subcategories?.length || 0) > 0;
-    const hasActivity = hasTransactions || hasSubcategories;
-
-    if (hasActivity) {
-      // Show category details with analytics and subcategories
-      setSelectedCategory(category);
-      setShowCategoryDetails(true);
-    } else {
-      // Direct edit for empty categories
-      setSelectedCategory(category);
-      setShowCategoryForm(true);
-    }
+    setSelectedCategory(category);
+    setShowCategoryDetails(true);
   };
 
   const handleBackFromDetails = () => {
@@ -156,17 +141,7 @@ export default function Categories() {
             <Text style={styles.errorText}>{error}</Text>
           )}
         </View>
-        
-        <TouchableOpacity style={styles.addButton} onPress={handlePresentModal}>
-          <MaterialCommunityIcons name="home-outline" size={28} color="#8E8E93" />
-        </TouchableOpacity>
       </View>
-      
-      {/* Date Range Picker */}
-      <DateRangePicker
-        selection={dateSelection}
-        onSelectionChange={setDateSelection}
-      />
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {loading ? (
@@ -178,8 +153,6 @@ export default function Categories() {
             {/* First row of categories */}
             <View style={styles.categoryRow}>
               {categories.slice(0, 4).map((category) => {
-                const hasActivity = (category.transactions?.all.count || 0) > 0 || 
-                                  (category.subcategories?.length || 0) > 0;
                 
                 return (
                   <TouchableOpacity 
@@ -200,12 +173,6 @@ export default function Categories() {
                     
                     <Text style={styles.categoryAmountLarge}>{formatCurrency(category.amount || 0)}</Text>
                     
-                    {/* Activity indicator */}
-                    {hasActivity && (
-                      <View style={styles.activityIndicator}>
-                        <View style={styles.activityDot} />
-                      </View>
-                    )}
                   </TouchableOpacity>
                 );
               })}
@@ -323,6 +290,10 @@ export default function Categories() {
           </View>
         )}
       </ScrollView>
+            {/* Floating Add Button */}
+      <TouchableOpacity style={styles.floatingButton} onPress={handlePresentModal}>
+        <MaterialCommunityIcons name="plus" size={28} color="white" />
+      </TouchableOpacity>
     </SafeAreaView>
   );
 }
@@ -498,5 +469,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
+  },
+  floatingButton: {
+    position: 'absolute',
+    bottom: 20,
+    right: 20,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#6B8AFE',
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
   },
 }); 
